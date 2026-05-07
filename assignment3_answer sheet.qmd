@@ -20,7 +20,7 @@ editor_options:
   chunk_output_type: inline
 ---
 
-Candidate number: TNKC5
+Candidate name: Kuei Chun Liu 
 
 Word count: 1998
 
