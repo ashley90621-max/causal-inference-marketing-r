@@ -1,0 +1,530 @@
+---
+title: "MSIN0094 Third Assignment"
+subtitle: "Due Friday 10am, Dec 13, 2024"
+colorlinks: true
+code-line-numbers: true
+format:
+  docx: 
+    number-sections: true
+    toc: false
+    number-depth: 2
+    fontsize: 10pt
+    linestretch: 1.5
+knitr:
+  opts_chunk:
+    echo: true
+    warning: true
+    message: true
+    error: true
+editor_options: 
+  chunk_output_type: inline
+---
+
+Candidate number: TNKC5
+
+Word count: 1998
+
+```{r}
+#| echo: false
+# load the dataset by running this code block.
+pacman::p_load(dplyr,modelsummary,fixest)
+
+# complete the following to load the data for your own local file
+data_full <- read.csv("C:\\Users\\User\\OneDrive\\桌面\\Marketing Analytics\\Third Assignment Files-20251125\\data_full.csv")
+```
+
+# Descriptive Analytics (20 pts)
+
+> ***Q1*** From `data_full`, generate a new variable, `final_price`, which is the actual retail price for each week (i.e., Recommended Retail Price after discounts). (**8pts**)
+
+-   Write your code below to generate final_price from RRP and discount. (**2pts**)
+
+```{r}
+# write your codes below
+
+# Generate a new variable "final_price" which is the actual retail price for week
+# final_price = RRP * (1 - discount)
+
+data_full <- data_full %>%
+  mutate(final_price = RRP * (1 - discount))
+```
+
+-   Visualise using scatter plot the relationship between final price and sales. Tips: you can use `ggplot2` and `geom_point` to create the scatter plot. Write your code below to create the scatter plot. (**2pts**)
+
+```{r}
+# write your codes below
+
+library(ggplot2)
+
+# Data visualization the relationship between final price and sales
+
+price_sales_plot <- ggplot(data_full, aes(x = final_price, y = sales)) +
+  geom_point(
+    alpha = 0.6, # Adjust the transparency of the point
+    color = "#1D4ED8" 
+  ) +
+  # Add trend lines to visualize the underlying relationship
+  geom_smooth(
+    method = "loess", # Use the LOESS smoothing method to display non-linear trends
+    se = TRUE, # Display standard error band
+    color = "#DC2626", 
+    linetype = "solid" 
+  ) +
+  # Set titles and axis labels
+  labs(
+    title = "Sales vs Final Price",
+    x = "Final Price, £",
+    y = "Sales, units"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(size = 10),
+    plot.caption = element_text(size = 8, color = "gray50")
+  )
+
+print(price_sales_plot)
+```
+
+-   Do you observe a positive or negative relationship between final price and sales? Is this relationship causal? Why or why not? (**4pts**, 150 words)
+
+The scatter plot shows a clear positive relationship between final price and sales: as the final price increases, the quantity sold also tends to increase, which is visible through the upward trend line and the concentration of higher sales at higher price points. This pattern suggests that higher-priced products, that often larger, higher-quality, or premium models, naturally sell more units, not because the high price causes more sales, but because these products come with desirable features that drive demand.
+
+Therefore, the observed correlation does not reflect a causal effect of price on sales. Instead, it is driven by confounding factors such as brand reputation, screen size, technology type (OLED/QLED), or marketing expenditure, which simultaneously raise both the price and the sales of premium TVs. In summary, the plot shows positive association, but it does not imply that increasing the price will increase sales.
+
+> ***Q2.*** Use `dplyr` to compute the average weekly dollar sales (final price \* unit sales) for each brand across all weeks (i.e., the result should be 1 average per brand). Rank the brands from the highest average dollar sales to the lowest average dollar sales. (**6pts**) Which brand has the highest average weekly dollar sales? (**2pts**).
+
+```{r}
+# write you code below 
+
+# Compute (final price * unit sales) for each brand across all weeks
+# Result: average weekly dollar sales per brand
+
+data_sales_by_brand <- data_full %>% 
+  mutate(dollar_sales = final_price * sales) %>%   # Create weekly dollar sales
+  group_by(brand, week_id) %>%   # Group data by brand
+  summarise(weekly_sales = sum(dollar_sales, na.rm = TRUE),.group = "drop") %>%
+  group_by(brand) %>%
+  summarise(avg_weekly_sales = mean(weekly_sales,na.rm = TRUE)) %>%
+  arrange(desc(avg_weekly_sales)) %>%
+  select(brand,avg_weekly_sales)
+
+```
+
+```{r}
+# please do not modify.
+# print out the ranking of brands based on average weekly dollar sales
+
+data_sales_by_brand 
+```
+
+Samsung has the highest average weekly dollar sales.
+
+> ***Q3.*** In Marketing, we refer to brand equity as the additional sales a brand can obtain when everything else is equal, i.e., the causal effect of brands on sales. Does the above average sales ranking causally identify which brand has the highest brand equity? Why or why not? (**4pts**; 150 words)
+
+The average sales ranking does not causally identify which brand has the highest brand equity. Brand equity is specifically defined as the causal effect of the brand name on sales, meaning it must isolate the impact of the brand while holding all other market and product factors equal.
+
+The ranking only reflects observed sales performance, but it does not hold “everything else equal,” which is required to measure true brand equity. Sales can be influenced by many confounding factors such as differences in screen size distribution, technology mix (OLED vs. QLED), pricing strategies, discount frequency, and brand-specific marketing expenditure. These factors vary systematically across brands and can inflate or reduce average sales, making the comparison non-causal. Without controlling for these variables an experimental design, we cannot interpret the ranking as the true causal effect of brand on sales. Therefore, the observed ranking reflects correlation, not brand equity.
+
+# Marketing Mix Modeling and Endogeneity (28pts)
+
+> ***Q4.*** Run a Marketing Mix Modeling linear regression as follows (**6pts**):
+
+-   Run the linear regression below using `fixest` package (Equation 1 hereinafter) (**2pts**).
+
+```{r}
+
+# write you codes for the regression below
+
+pacman::p_load(modelsummary, fixest)
+
+# Build linear regression model
+
+ols_1 <- feols(
+    sales ~ final_price + marketing_expense, # Y ~ X
+    data = data_full # dataset
+)
+
+```
+
+```{r}
+# do not modify the code below; this is to print out the results
+
+modelsummary(ols_1,
+             stars = T,
+             gof_map = c('nobs','r.squared'))
+```
+
+-   Interpret the coefficients of `final_price`, including coefficients and statistical significance (**4pts**).
+
+The **coefficient** of final_price is 0.618, meaning that holding marketing expenditure constant, a £1 increase in final price is associated with an average increase of 0.618 units in sales. This positive sign indicates a positive relationship between price and quantity sold, though this reflects correlation rather than a causal price effect.
+
+The coefficient is **highly statistically significant** at the p \< 0.001 level, as indicated by the triple stars. This means the probability that such an estimate arises purely by random chance is extremely low, providing strong statistical evidence of an association between final price and sales in the dataset.
+
+> ***Q5.*** Based on the regression coefficients reported above, discuss the endogeneity issues with `final_price` in Equation 1. For each endogeneity cause, explain the general definitions and then give concrete examples in Amazon's context. (**12pts**)
+
+-   General definition of each endogeneity cause (**6pts**, 200 words)
+
+Endogeneity arises when an explanatory variable is correlated with the regression error term, causing biased and inconsistent coefficient estimates.
+
+**Omitted Variable Bias (OVB)** arises when an important determinant of the outcome is excluded from the regression and this omitted factor is correlated with the focal explanatory variable. OVB requires two conditions: (a) the omitted variable affects the dependent variable, and (b) the omitted variable is correlated with the included regressor. When both conditions hold, part of the omitted variable’s effect is absorbed into the coefficient of the included variable, causing bias and violating the OLS assumption that the error term contains only random noise rather than systematic information.
+
+**Reverse Causality (Simultaneity)** occurs when the explanatory variable influences the outcome while the outcome simultaneously influences the explanatory variable. Because causality flows in both directions, the regressor becomes correlated with the error term, breaking the assumption that X must be determined prior to Y. This simultaneity distorts the estimated coefficient, making OLS biased and inconsistent.
+
+**Measurement Error** arises when the observed explanatory variable is an imperfect measure of its true underlying value. When the independent variable is measured with noise, the observed regressor becomes correlated with the error term. This weakens the true X–Y relationship and biases the estimated coefficient toward zero, preventing a causal interpretation in OLS.
+
+-   In Amazon's context, concrete examples to illustrate each endogeneity cause (**6pts**, 200 words)
+
+In Amazon’s TV sales data, **omitted variable bias** occurs when important drivers of sales, such as screen size, resolution, HDR support, or brand reputation, are excluded from Equation 1. Even though they affect sales and are correlated with final_price. Premium TVs with larger screens or OLED panels generally have both higher demand and higher RRPs, meaning these omitted factors inflate the estimated price coefficient by attributing their effects to final_price.
+
+**Reverse causality** arises because Amazon uses algorithmic dynamic pricing. When Amazon expects higher demand—such as during Prime Day or for popular 55-inch models—it offers smaller discounts, resulting in a higher final_price. Thus, sales influence pricing decisions at the same time that price influences sales. This two-way causality causes final_price to be correlated with the error term.
+
+**Measurement error** may occur if the recorded final_price does not perfectly match the true transaction price. Customers may receive personalised promotions, bundle discounts, or targeted coupons not captured in the dataset. If observed prices differ from true prices, final_price contains random error, weakening its relationship with sales and biasing the coefficient, the direction of the bias can become complex.
+
+> ***Q6.*** If the discount each week in our dataset is randomized by Amazon each week, will Equation 1 give the causal effect of price on sales? Give your reasoning. (**6pts**; 200 words)
+
+If the discount is truly randomised by Amazon each week, then final_price becomes exogenously determined and Equation 1 can recover the causal effect of price on sales. Randomisation is the gold standard for causal inference because it breaks the correlation between final_price and unobserved demand shifters (e.g., seasonality, brand strength, or customers’ willingness to pay) that are otherwise absorbed into the error term.
+
+Consequently, the exogeneity condition holds and final_price is independent of the error term, resolving the internal threats of Omitted Variable Bias and Reverse Causality. In this scenario, the coefficient on final_price can be interpreted as the average causal effect of a one-unit increase in price on unit sales, holding marketing_expense constant. However, this conclusion relies on strong assumptions.For instance, the discount truly follows a random assignment process, there is no non-compliance or hidden targeting, and price and sales are measured accurately. If these core conditions are violated, endogeneity problems may reappear and the coefficient would no longer be strictly causal.
+
+> ***Q7.*** From the below regression designed by another data scientist, discuss whether customers always prefer larger screens (i.e., everything else being equal, a larger screen always leads to higher sales)? (**4pts**; 150 words)
+
+Based on the structure of the regression model, where screen size is typically represented by categorical dummy variables (with a baseline like "30-39") and crucial controls like final price are included, the conclusion is no, customers do not always prefer larger screens uniformly. While the coefficients for "40-49" and "50-59" are likely positive and highly significant, suggesting a clear causal preference for moderate size increases. The marginal benefit of the largest category, "60+", may not exceed the "50-59" segment. Which means, as we increase screen size from one level to another, the additional growth in sales (i.e., marginal benefits) may begin to diminish or stagnate after a certain size is reached.
+
+This result suggests a non-linear relationship where the positive effect of size diminishes or plateaus at the largest end, likely due to real-world constraints such as living space or market saturation, thus indicating that the causal effect of screen size on sales is complex and not strictly monotonic.
+
+# Instrumental Variables (20pts)
+
+> ***Q8.*** One way to obtain causal effects of price on sales from secondary data is to use the instrumental variable method. (**12pts**)
+
+-   List two variables you would collect as instrumental variables for `final_price`
+
+The variable **cost_shifter** serves as a suitable instrumental variable for final_price because it affects Amazon’s pricing decisions but does not directly influence consumer demand. Cost_shifter captures supply-side fluctuations—such as logistics cost changes, supplier fees, or component cost adjustments—that Amazon incorporates when setting weekly discounts and final prices. These cost movements satisfy the relevance requirement because they systematically shift final_price, as seen in the strong first-stage relationship. At the same time, they plausibly meet the exclusion restriction because these upstream cost variations are not observed by consumers and therefore do not directly alter their willingness to buy a TV. Any effect on sales should occur only through their influence on final_price, making cost_shifter a conceptually valid and economically grounded instrument.
+
+The **Recommended Retail Price (RRP)** can also function as an instrumental variable for final_price because it is determined by manufacturers long before weekly demand shocks occur. RRP satisfies the relevance condition because products with higher manufacturer-set RRPs generally have higher final prices even after discounts, making it a strong predictor of final_price in the first stage. Importantly, RRP is set independently of short-run Amazon demand fluctuations and is not influenced by weekly sales performance, which supports the exclusion restriction. RRP affects sales only through the price channel by structurally anchoring the level of discounts and final transaction price. Without directly shifting consumers’ intrinsic demand once price is controlled for. Thus, RRP provides a stable, supply-driven source of exogenous price variation appropriate for identifying the causal effect of price on sales.
+
+-   Can one use the VAT tax rate of TV products as an instrument variable for `final_price`? (**4pts**; 100 words)
+
+No, the VAT tax rate for TV products cannot be used as an instrumental variable for final_price in this dataset.
+
+For an IV to be valid, it must vary across time, products, or regions to satisfy the Relevance Condition, but VAT for TVs in a single-country Amazon dataset is typically a fixed national rate with no week-to-week or product-level variation, making it unable to explain meaningful price fluctuations. It also risks violating the Exclusion Restriction because broader tax changes may affect overall consumer demand or market conditions beyond price alone. Therefore, VAT does not provide valid exogenous variation for identifying the causal effect of price on sales.
+
+> ***Q9.*** Assume you have identified one instrument variable `cost_shifter` in `data_full`. In the code blocks below, write down the two regressions you would need to run in order to estimate the causal effects of `final_price` on `sales`, including `marketing_expense` as the only control variable (**8pts**)
+
+-   Correct first stage codes and explanation of the code (**3pts**)
+
+-   Correct second stage codes and explanation of the codes (**3pts**)
+
+```{r}
+# show the estimation code below and describe the steps
+
+### Stage 1: write the first-stage regression  
+
+ols_stage1 <-feols(
+  final_price ~ cost_shifter + marketing_expense,
+  data = data_full
+)
+
+# Save fitted values back into the dataset
+data_full <- data_full %>%
+  mutate(fitted_final_price = fitted(ols_stage1))
+
+### Stage 2: write the second-stage regression 
+
+ols_stage2 <-  feols(
+  sales ~ fitted_final_price + marketing_expense,
+  data = data_full
+)
+  
+```
+
+```{r}
+# do not modify the code below; this is to print out the results
+
+modelsummary(list(
+  "First Stage" = ols_stage1,
+  "Second Stage" = ols_stage2
+),            
+stars = T, gof_map = c('nobs','r.squared'))
+```
+
+-   Based on the results of the two regressions, discuss the causal effect of `final_price` on `sales` (**2pts**)
+
+Based on the two-stage least squares results, the coefficient on *fitted_final_price* in the second stage is **–0.734\*** (p \< 0.001), indicating a strong and statistically **significant causal negative effect** of price on sales. After isolating the exogenous variation in price using cost_shifter as the instrument, the estimate becomes both larger in magnitude and economically meaningful compared with the biased OLS relationship.
+
+This confirms the law of demand: holding marketing expenditure constant, a one-unit increase in the instrument-predicted price causally reduces weekly sales by approximately 0.73 units. Because the instrument filters out endogeneity from factors such as demand-based pricing and product characteristics, the 2SLS estimate reflects the true causal impact rather than confounded correlations. Therefore, the IV approach provides credible evidence that higher prices lead to lower sales.
+
+> ***Q10.*** Design the A/B/N testing (**20 pts**)
+
+**Step 1:**
+
+Unit of randomization means I need to first determine the test subjects. The following discussion uses "user/customer," "session/website visit," and "product/product page" as units.
+
+When using "person" as the unit, the advantage is that the same person only sees one version, minimizing interference; it's suitable for observing changes in human behavior. On the other hand, the disadvantage is problems arise if accounts are shared or the same person has multiple accounts.
+
+When using "session" as the unit, the advantage is the ability to quickly collect more experimental data because each visit to the website is recalculated.
+
+The disadvantage is that the same person may see different versions at different times. Essentially, this data from sessions is not independent, as many sessions are actually from the same person. While the quantity sounds large, it's not as "new information" as it seems.
+
+When using "product" as the unit, the advantage is that it's technically easier. However, the disadvantage is that different products naturally have different levels of popularity, making it difficult to determine whether the difference is due to AI try-on or the product itself.
+
+**Step 2**:
+
+Since the goal of the experiment is to measure each customer's response to the virtual try-on experience, I will use a single customer as the unit of randomization. Since A/B/N testing can be costly and risky, normally we would not use all the users, so 10% for experimential group is a suitable sample. Assign each customer to one of the following three groups: Control Group (no AI try-on): 80% of customers, Experimental Group A (real photo try-on): 10% of customers, and Experimental Group B (cartoon avatar try-on): 10% of customers.
+
+Randomization will be performed at the customer ID level to ensure that each customer is exposed to the same version every time they visit the platform during the experiment. This avoids interference between experimental groups and helps to more clearly identify behavioral responses.
+
+In an A/B/N test, the most important thing is to determine "which AI Virtual Try-On feature" most effectively drives consumer purchases and brings the greatest benefit to the platform. Choosing "customers" avoids the independence problem of "sessions," and with a sample size, this method is not necessary. The "product page" does not clearly show the differences in AI Virtual Try-On under different scenarios, and is not very helpful for the purpose of the experiment.
+
+```{r}
+
+pacman::p_load(dplyr)
+
+# Set the seed for reproducibility
+set.seed(888) 
+
+# Assuming a total pool of 100,000 users. 
+# We simulate drawing a subset for the experiment.
+N_total <- 100000 
+N_experiment <- 10000 # Using 10% of the total pool as the sample size
+
+# 1. Simulate the data frame with user IDs for the experiment sample
+data_user <- data.frame(user_id = 1:N_experiment) 
+
+# 2. Define the non-symmetric allocation probabilities (60:20:20 split)
+target_probabilities <- c(0.80, 0.10, 0.10) 
+group_labels <- c("Control", "Treatment A", "Treatment B")
+# Note: The proportions must sum to 1.0 (80% + 10% + 10% = 100%).
+
+# 3. Perform Random Sampling Allocation
+# The sample function randomly assigns labels based on the defined probabilities.
+data_user <- data_user %>%
+    mutate(
+        group_name = sample(
+            x = group_labels, 
+            size = N_experiment, 
+            replace = TRUE, # Sampling with replacement allows the probabilities to hold true over many trials
+            prob = target_probabilities # Apply the desired 80:10:10 allocation probabilities
+        )
+    )
+
+# 4. Check the distribution result
+print("Non-Symmetric Random Sampling Allocation Result (Target: 80:10:10)")
+print(table(data_user$group_name))
+print(prop.table(table(data_user$group_name)))
+```
+
+**Step 3:**
+
+The sample size determination plan utilizes the standard formula for a two-sample t-test, assuming 80% power and 5% significance. Yielding n is approximately **1,571** for the £10 (Treatment A). And, n is approximately **6,280** for the £5 (Treatment B).
+
+This illustrates the core principle of power analysis: the smaller the effect size one seeks to detect, the larger the required sample size becomes.
+
+```{r}
+pacman::p_load(pwr)
+
+# Define common parameters
+alpha <- 0.05 # Significance level
+power <- 0.8 # Desired power
+
+# A: MDE = £10
+# Standardized effect size (Cohen's d) = 10 / 100 = 0.10
+effect_size_A <- 0.10 
+
+# Calculate required sample size per group for Treatment A
+sample_size_A <- pwr.t.test(
+    d = effect_size_A,
+    sig.level = alpha,
+    power = power,
+    type = "two.sample",
+    alternative = "two.sided"
+)
+
+# B: MDE = £5
+# Standardized effect size (Cohen's d) = 5 / 100 = 0.05
+effect_size_B <- 0.05 
+
+# Calculate required sample size per group for Treatment B
+sample_size_B <- pwr.t.test(
+    d = effect_size_B,
+    sig.level = alpha,
+    power = power,
+    type = "two.sample",
+    alternative = "two.sided"
+)
+
+# Sample size outcome
+print(sample_size_A)
+print(sample_size_B)
+```
+
+**Step 4**: Data collection plan, including what data to collect?
+
+In this experiment, I will use "customers" as the randomized unit, randomly assigning them from 100,000 customers to the control group, Treatment A, and Treatment B, and continuously collecting behavioral data over a fixed experimental period (e.g., 2–4 weeks). First, it is necessary to fully record each customer's experimental group identifier (control/A/B), customer ID, experimental period, and whether the Virtual Try-On function was used, to ensure accurate mapping to each group later.
+
+Regarding data content, the core variables are those related to "spending and conversion," such as: each customer's total spending during the experimental period, number of orders, whether at least one purchase was completed (conversion rate), and average order value. Simultaneously, "interaction behavior" data should be collected, such as: whether virtual try-on was used, the number of times it was used, the dwell time, the number of items added to the shopping cart after trying on, and the number of products viewed.
+
+Finally, basic controls need to be recorded, such as the customer's historical spending habits, device type (mobile/PC), traffic source, and product category. Control data should be collected as comprehensively as possible to increase the reliability of the analysis.
+
+**Step 5**:
+
+Based on the data collection plan and the provided R code, the statistical analysis will proceed in three steps:
+
+Primary Analysis (Total Spending): Use OLS regression (feols) with Total Spending \~ group_name to directly estimate the average causal lift in spending for Treatment A and Treatment B relative to Control.
+
+Robustness Check: Rerun the primary model as Total Spending \~ group_name + historical_spending to control for the customer's historical spending habits (covariate adjustment), which increases the precision of the estimated treatment effects.
+
+Secondary Analysis (Binary Outcomes): Use Logistic Regression (glm with binomial family) for binary outcomes (conversion_completed and used_vto) to determine if the VTO treatments significantly alter the probability of purchase or function usage.
+
+```{r}
+
+pacman::p_load(dplyr, fixest, modelsummary, broom)
+
+# 1. DATA PREPARATION AND SIMULATION
+
+# Set experiment sample size (e.g., using 100,000 customers)
+N <- 100000 
+set.seed(42) # Set seed for reproducibility
+
+# 1. Define the non-symmetric allocation probabilities (80:10:10)
+target_probabilities <- c(0.80, 0.10, 0.10) 
+group_labels <- c("Control", "Treatment A", "Treatment B")
+
+# 2. Randomly generate group assignments based on the probabilities
+group_assignments <- sample(group_labels, N, replace = TRUE, prob = target_probabilities)
+
+# 3. Create Boolean flags for calculating treatment effects in simulation
+is_treated_A <- (group_assignments == "Treatment A")
+is_treated_B <- (group_assignments == "Treatment B")
+
+data_customer <- data.frame(
+    # Randomized Group Identifier
+    customer_id = 1:N,
+    group_name = factor(group_assignments, levels = group_labels),
+    
+    # Core Continuous Outcome (Y1): Total Spending (Simulating a $10 lift for A, $5 lift for B)
+    total_spending = rnorm(N, mean = 1000 + 10 * is_treated_A + 5 * is_treated_B, sd = 100),
+    
+    # Core Binary Outcome (Y2): Conversion (Simulating a 2% lift for A)
+    conversion_completed = rbinom(N, 1, prob = 0.15 + 0.02 * is_treated_A),
+    
+    # Control Variable: Customer's historical spending
+    historical_spending = rnorm(N, mean = 500, sd = 50),
+    
+    # Interaction Behavior Outcome (Y3): VTO usage (Simulating 5% higher usage in A/B groups)
+    used_vto = rbinom(N, 1, prob = 0.4 + 0.05 * (is_treated_A | is_treated_B))
+)
+
+
+# 2. PRIMARY ANALYSIS: Total Spending
+
+# Goal: Estimate the causal effect of Treatment A and B on total spending compared to Control.
+
+# A. Descriptive Statistics (Check means and sample sizes for each group)
+print("A. Descriptive Statistics for Total Spending")
+data_customer_avg <- data_customer %>%
+    group_by(group_name) %>%
+    summarise(
+        N = n(),
+        avg_spending = mean(total_spending)
+    ) %>%
+    ungroup()
+print(data_customer_avg)
+
+
+# B. Primary Regression Model (FEOLS/LM)
+# The coefficients for Treatment A and B will represent the causal effect (mean difference) vs. Control.
+
+print(" B. Primary Regression: Treatment Effect on Total Spending")
+spending_model <- feols(
+    fml = total_spending ~ group_name,
+    data = data_customer
+)
+modelsummary(spending_model, stars = TRUE, gof_map = c("nobs", "r.squared"), title = "Treatment Effect on Total Spending (Baseline: Control)")
+
+
+# 3. SECONDARY & ROBUSTNESS ANALYSIS
+
+# C. Robustness Check: Controlling for historical spending
+# Goal: Increase precision and control for pre-existing differences (Blocking/Covariate Adjustment).
+
+print("C. Robustness Check: Controlling for Historical Spending")
+robust_spending_model <- feols(
+    total_spending ~ group_name + historical_spending, # historical_spending as control variable
+    data = data_customer
+)
+modelsummary(robust_spending_model, stars = TRUE, gof_map = c("nobs", "r.squared"), title = "Spending Model with Historical Spending Control")
+
+
+# D. Secondary Outcome: Conversion Rate (Binary Data)
+# Goal: Test the effect of the VTO treatments on conversion using a Logistic Regression.
+
+print("D. Secondary Outcome: Logit Model for Purchase Conversion")
+conversion_model <- glm(
+    conversion_completed ~ group_name,
+    data = data_customer,
+    family = binomial(link = "logit") # Logit model for binary outcome
+)
+modelsummary(conversion_model, stars = TRUE, gof_map = c("nobs", "r.squared"), title = "Logit Model: Treatment Effect on Purchase Conversion")
+
+
+# E. Tertiary Outcome: Interaction Behavior (Used VTO)
+# Goal: Check if the VTO treatment (A/B) causally influenced VTO usage (Key behavioral metric).
+
+print("E. Tertiary Outcome: Logit Model for VTO Usage")
+vto_usage_model <- glm(
+    used_vto ~ group_name,
+    data = data_customer,
+    family = binomial(link = "logit")
+)
+modelsummary(vto_usage_model, stars = TRUE, gof_map = c("nobs", "r.squared"), title = "Logit Model: Treatment Effect on VTO Usage")
+```
+
+> ***Q11.*** Finally, Tom would like to study the causal effect of Amazon rating on product sales. For instance, what is the causal effect of a 4.5-star rating on sales compared to a 4-star rating. Propose **one** natural experiment method to study this causal question. (**12pts**)
+
+The final Regression Discontinuity Design (RDD) provides strong evidence of a causal impact of high marketing expenditure on product sales. Using marketing expense as the continuous running variable, we implemented a sharp RDD at the 80th-percentile cutoff (Top 20% spending threshold). This threshold—approximately £3,987 in our data—represents the point at which marketing investments become substantially more influential.
+
+The empirical results show a statistically significant jump in sales upon crossing this threshold (RD Effect = +172.36 units, z = 5.47, p \< 0.001). This indicates that products receiving marketing investment above the top-20% cutoff sell around 172 additional units relative to comparable products just below the threshold. This demonstrates the presence of a non-linear leverage point in marketing spending: only when firms push their market expense beyond this high-spending cutoff does causally unlock a sizable increase in sales volume.
+
+```{r}
+pacman::p_load(fixest, modelsummary, dplyr, rdrobust)
+
+# Load the primary dataset
+data_full <- read.csv("data_full.csv")
+
+# 1. Calculate the Sharp Cutoff (C)
+# Cutoff C: The top 20% percentile of marketing expense (Q80)
+# This defines the threshold for the top 20% Highest Marketing Spend.
+marketing_cutoff <- quantile(data_full$marketing_expense, 0.80) # 3987
+
+# 2. Create Core RDD Variables
+data_full <- data_full %>%
+    mutate(
+        # RDD Running Variable (X_centered): Centered Marketing Expense
+        # Centering the running variable around the Q80 cutoff makes C = 0.
+        MktExp_Centered = marketing_expense - marketing_cutoff,
+        
+        # RDD Treatment (T): Whether the Q80 threshold is crossed
+        # Treated = 1 if Marketing Expense >= Q80
+        Treated = ifelse(marketing_expense >= marketing_cutoff, 1, 0),
+        
+        # Outcome Y: Sales
+        Sales = sales
+    )
+
+# 3. Run the RDD Model (rdrobust)
+# Goal: Estimate the Local Average Treatment Effect (LATE) of crossing top 20% on Sales.
+
+rdd_model_mkt_sales_top20 <- rdrobust(
+    y = data_full$Sales,                      # Outcome Variable Y: Sales
+    x = data_full$MktExp_Centered,            # Running Variable X: Centered Marketing Expense
+    c = 0,                                    # Cutoff C: Set to 0
+    p = 1,                                    # Polynomial order 1 (Local Linear Regression)
+    kernel = "triangular"                     # RDD Standard Practice: Triangular Kernel
+)
+
+# 4. Output the Robust RDD Results
+print("RDD Result: Causal Effect of top 20% Marketing Threshold on Sales")
+summary(rdd_model_mkt_sales_top20)
+```
